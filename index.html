@@ -1,0 +1,1460 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PFC Log</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600&family=Playfair+Display:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --colorBg: #0b0f14;
+      --colorPanel: #131a23;
+      --colorPanelSoft: #0f151d;
+      --colorAccent: #ffb347;
+      --colorAccentAlt: #3ed2c6;
+      --colorText: #f4f2ed;
+      --colorMuted: #9aa4b2;
+      --colorStroke: rgba(255, 255, 255, 0.08);
+      --colorGlow: rgba(255, 179, 71, 0.16);
+      --shadowSoft: 0 24px 60px rgba(0, 0, 0, 0.35);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Noto Sans TC", "PingFang TC", sans-serif;
+      color: var(--colorText);
+      background:
+        radial-gradient(900px 380px at 12% -8%, rgba(62, 210, 198, 0.16), transparent 60%),
+        radial-gradient(700px 420px at 90% 2%, rgba(255, 179, 71, 0.14), transparent 55%),
+        linear-gradient(120deg, #0b0f14, #121a24 62%, #0b0f14);
+      min-height: 100vh;
+    }
+
+    .AppShell {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 28px 20px 60px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .TopBar {
+      display: grid;
+      gap: 16px;
+      padding: 22px;
+      background: var(--colorPanel);
+      border-radius: 20px;
+      box-shadow: var(--shadowSoft);
+      border: 1px solid var(--colorStroke);
+    }
+
+    .TopGrid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .FieldBlock {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .FieldLabel {
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--colorMuted);
+    }
+
+    .BaseInput,
+    .BaseTextArea {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      background: var(--colorPanelSoft);
+      color: var(--colorText);
+      font-size: 15px;
+      outline: none;
+      transition: border 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .BaseInput:focus,
+    .BaseTextArea:focus {
+      border-color: var(--colorAccentAlt);
+      box-shadow: 0 0 0 3px rgba(62, 210, 198, 0.12);
+    }
+
+    .SegmentGroup {
+      display: flex;
+      gap: 10px;
+    }
+
+    .SegmentOption {
+      position: relative;
+      flex: 1;
+    }
+
+    .SegmentOption input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .SegmentOption span {
+      display: block;
+      text-align: center;
+      padding: 10px 0;
+      border-radius: 12px;
+      background: var(--colorPanelSoft);
+      border: 1px solid var(--colorStroke);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .SegmentOption input:checked + span {
+      background: var(--colorAccent);
+      color: #1a1107;
+      border-color: transparent;
+      box-shadow: 0 10px 20px rgba(255, 179, 71, 0.28);
+      font-weight: 600;
+    }
+
+    .SectionBlock {
+      background: rgba(15, 21, 29, 0.78);
+      border-radius: 20px;
+      padding: 20px;
+      border: 1px solid var(--colorStroke);
+      box-shadow: var(--shadowSoft);
+      backdrop-filter: blur(8px);
+    }
+
+    .SectionHeader {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .SectionTitle {
+      margin: 0;
+      font-family: "Playfair Display", "Noto Sans TC", serif;
+      font-size: 22px;
+      letter-spacing: 0.03em;
+    }
+
+    .SectionActions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .PrimaryButton,
+    .GhostButton {
+      border: none;
+      border-radius: 999px;
+      padding: 10px 18px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .PrimaryButton {
+      background: var(--colorAccent);
+      color: #1a1107;
+      box-shadow: 0 12px 24px rgba(255, 179, 71, 0.3);
+    }
+
+    .GhostButton {
+      background: var(--colorPanelSoft);
+      color: var(--colorText);
+      border: 1px solid var(--colorStroke);
+    }
+
+    .PrimaryButton:hover,
+    .GhostButton:hover {
+      transform: translateY(-1px);
+    }
+
+    .MealGrid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .MealCard {
+      background: var(--colorPanel);
+      border-radius: 18px;
+      padding: 16px;
+      border: 1px solid var(--colorStroke);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .MealHeader {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .MealTitle {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .ImageUploadButton {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(62, 210, 198, 0.16);
+      color: var(--colorAccentAlt);
+      border: 1px dashed rgba(62, 210, 198, 0.5);
+      padding: 6px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .HiddenInput {
+      display: none;
+    }
+
+    .ImageGrid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+      gap: 10px;
+    }
+
+    .ImageTile {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #0a0f14;
+      border: 1px solid var(--colorStroke);
+      aspect-ratio: 4 / 3;
+    }
+
+    .ImageTile img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .IconButton {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      border: none;
+      background: rgba(0, 0, 0, 0.6);
+      color: #fff;
+      cursor: pointer;
+    }
+
+    .MealBody {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .PortionGrid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .PortionRow {
+      display: grid;
+      grid-template-columns: 1fr 110px;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .PortionLabel {
+      font-size: 14px;
+      color: var(--colorMuted);
+    }
+
+    .PortionInput {
+      text-align: right;
+    }
+
+    .BehaviorGrid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .SummaryTable {
+      overflow-x: auto;
+    }
+
+    .SummaryTableTable {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .SummaryTableTable th,
+    .SummaryTableTable td {
+      padding: 10px;
+      border-bottom: 1px solid var(--colorStroke);
+      text-align: right;
+    }
+
+    .SummaryTableTable th:first-child,
+    .SummaryTableTable td:first-child {
+      text-align: left;
+    }
+
+    .DeltaPositive {
+      color: #7ddf87;
+    }
+
+    .DeltaNegative {
+      color: #ff9b8b;
+    }
+
+    .DeltaZero {
+      color: var(--colorMuted);
+    }
+
+    .MacroSummary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .MacroCard {
+      background: rgba(19, 26, 35, 0.9);
+      border-radius: 16px;
+      padding: 12px 14px;
+      border: 1px solid var(--colorStroke);
+    }
+
+    .MacroLabel {
+      color: var(--colorMuted);
+      font-size: 12px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .MacroValue {
+      font-size: 20px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+
+    .TargetStatus {
+      font-size: 12px;
+      color: var(--colorMuted);
+    }
+
+    .ExportLayer {
+      position: fixed;
+      left: -9999px;
+      top: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .ExportCard {
+      width: 900px;
+      background: #0f141c;
+      color: #f4f2ed;
+      border-radius: 24px;
+      padding: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+    }
+
+    .ExportTitle {
+      font-family: "Playfair Display", "Noto Sans TC", serif;
+      font-size: 22px;
+      margin-bottom: 12px;
+    }
+
+    .ExportMeal {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 14px;
+      margin-bottom: 12px;
+      background: rgba(19, 26, 35, 0.8);
+    }
+
+    .ExportMealTitle {
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+
+    .ExportImageGrid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .ExportImageGrid img {
+      width: 100%;
+      border-radius: 12px;
+      object-fit: cover;
+      aspect-ratio: 4 / 3;
+    }
+
+    .ExportNote {
+      font-size: 13px;
+      color: var(--colorMuted);
+      margin-bottom: 8px;
+    }
+
+    .ExportTable {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .ExportTable th,
+    .ExportTable td {
+      padding: 6px 4px;
+      text-align: right;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .ExportTable th:first-child,
+    .ExportTable td:first-child {
+      text-align: left;
+    }
+
+    .ExportMacroGrid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .ExportMacroCard {
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 14px;
+      padding: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .ExportLabel {
+      font-size: 11px;
+      color: var(--colorMuted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .ExportValue {
+      font-size: 18px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+
+    .ExportBehaviorGrid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .ExportBehaviorItem {
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 14px;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    @media (max-width: 980px) {
+      .TopGrid {
+        grid-template-columns: 1fr;
+      }
+
+      .MealGrid {
+        grid-template-columns: 1fr;
+      }
+
+      .BehaviorGrid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .MacroSummary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .ExportCard {
+        width: 720px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .BehaviorGrid {
+        grid-template-columns: 1fr;
+      }
+
+      .MacroSummary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .PortionRow {
+        grid-template-columns: 1fr 90px;
+      }
+
+      .ExportCard {
+        width: 94vw;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="AppShell">
+    <header class="TopBar">
+      <div class="TopGrid">
+        <div class="FieldBlock">
+          <label class="FieldLabel" for="dateInput">日期</label>
+          <input id="dateInput" class="BaseInput" type="date">
+        </div>
+        <div class="FieldBlock">
+          <span class="FieldLabel">日类型</span>
+          <div class="SegmentGroup">
+            <label class="SegmentOption">
+              <input type="radio" name="dayType" value="normalDay">
+              <span>普通日</span>
+            </label>
+            <label class="SegmentOption">
+              <input type="radio" name="dayType" value="trainingDay">
+              <span>训练日</span>
+            </label>
+          </div>
+        </div>
+        <div class="FieldBlock">
+          <label class="FieldLabel" for="dayNote">当天问题/备注</label>
+          <input id="dayNote" class="BaseInput" type="text" maxlength="120">
+        </div>
+      </div>
+    </header>
+
+    <section class="SectionBlock">
+      <div class="SectionHeader">
+        <h2 class="SectionTitle">饮食记录</h2>
+        <div class="SectionActions">
+          <button id="exportFoodBtn" class="PrimaryButton" type="button">导出饮食图</button>
+        </div>
+      </div>
+      <div id="mealGrid" class="MealGrid"></div>
+    </section>
+
+    <section class="SectionBlock">
+      <div class="SectionHeader">
+        <h2 class="SectionTitle">行为记录</h2>
+        <div class="SectionActions">
+          <button id="exportBehaviorBtn" class="GhostButton" type="button">导出行为图</button>
+        </div>
+      </div>
+      <div class="BehaviorGrid">
+        <div class="FieldBlock">
+          <label class="FieldLabel" for="sleepHours">睡眠时长</label>
+          <input id="sleepHours" class="BaseInput" type="number" inputmode="decimal" min="0" step="0.1" data-behavior-key="sleepHours">
+        </div>
+        <div class="FieldBlock">
+          <label class="FieldLabel" for="exerciseMinutes">运动分钟数</label>
+          <input id="exerciseMinutes" class="BaseInput" type="number" inputmode="decimal" min="0" step="1" data-behavior-key="exerciseMinutes">
+        </div>
+        <div class="FieldBlock">
+          <label class="FieldLabel" for="steps">步数</label>
+          <input id="steps" class="BaseInput" type="number" inputmode="numeric" min="0" step="1" data-behavior-key="steps">
+        </div>
+        <div class="FieldBlock">
+          <label class="FieldLabel" for="waterMl">饮水量</label>
+          <input id="waterMl" class="BaseInput" type="number" inputmode="decimal" min="0" step="50" data-behavior-key="waterMl">
+        </div>
+        <div class="FieldBlock">
+          <label class="FieldLabel" for="bowelCount">排便次数</label>
+          <input id="bowelCount" class="BaseInput" type="number" inputmode="numeric" min="0" step="1" data-behavior-key="bowelCount">
+        </div>
+        <div class="FieldBlock">
+          <label class="FieldLabel" for="behaviorNote">简短备注</label>
+          <input id="behaviorNote" class="BaseInput" type="text" maxlength="120" data-behavior-key="note">
+        </div>
+      </div>
+    </section>
+
+    <section class="SectionBlock">
+      <div class="SectionHeader">
+        <h2 class="SectionTitle">每日汇总</h2>
+        <div id="targetStatus" class="TargetStatus"></div>
+      </div>
+      <div id="summaryTable" class="SummaryTable"></div>
+      <div id="macroSummary" class="MacroSummary"></div>
+    </section>
+  </div>
+
+  <div id="ExportLayer" class="ExportLayer"></div>
+
+  <input id="targetFileInput" class="HiddenInput" type="file" accept=".txt,.json">
+
+  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script>
+    const nutrientTable = {
+      dairy: {
+        fullFat: { protein: 8, fat: 8, carbs: 12, calories: 150 },
+        lowFat: { protein: 8, fat: 4, carbs: 12, calories: 120 },
+        skim: { protein: 8, fat: 0, carbs: 12, calories: 80 }
+      },
+      protein: {
+        lowFat: { protein: 7, fat: 3, carbs: 0, calories: 55 },
+        mediumFat: { protein: 7, fat: 5, carbs: 0, calories: 75 },
+        highFat: { protein: 7, fat: 10, carbs: 0, calories: 120 }
+      },
+      wholeGrains: { protein: 2, fat: 0, carbs: 15, calories: 70 },
+      vegetables: { protein: 1, fat: 0, carbs: 5, calories: 25 },
+      fruits: { protein: 0, fat: 0, carbs: 15, calories: 60 },
+      oilsAndNuts: { protein: 0, fat: 5, carbs: 0, calories: 45 }
+    };
+
+    const portionMeta = [
+      { key: "dairyFull", label: "乳品類 全脂", table: nutrientTable.dairy.fullFat },
+      { key: "dairyLow", label: "乳品類 低脂", table: nutrientTable.dairy.lowFat },
+      { key: "dairySkim", label: "乳品類 脱脂", table: nutrientTable.dairy.skim },
+      { key: "proteinLow", label: "豆魚蛋肉類 低脂", table: nutrientTable.protein.lowFat },
+      { key: "proteinMedium", label: "豆魚蛋肉類 中脂", table: nutrientTable.protein.mediumFat },
+      { key: "proteinHigh", label: "豆魚蛋肉類 高脂", table: nutrientTable.protein.highFat },
+      { key: "wholeGrains", label: "全穀雜糧類", table: nutrientTable.wholeGrains },
+      { key: "vegetables", label: "蔬菜類", table: nutrientTable.vegetables },
+      { key: "fruits", label: "水果類", table: nutrientTable.fruits },
+      { key: "oilsAndNuts", label: "油脂與堅果種子類", table: nutrientTable.oilsAndNuts }
+    ];
+
+    const summaryRows = [
+      { key: "dairyTotal", label: "乳品類", targetLabel: "乳品類", intakeKeys: ["dairyFull", "dairyLow", "dairySkim"] },
+      { key: "proteinLow", label: "豆魚蛋肉類(低脂)", targetLabel: "豆魚蛋肉類(低脂)", intakeKeys: ["proteinLow"] },
+      { key: "proteinMedium", label: "豆魚蛋肉類(中脂)", targetLabel: "豆魚蛋肉類(中脂)", intakeKeys: ["proteinMedium"] },
+      { key: "proteinHigh", label: "豆魚蛋肉類(高脂)", targetLabel: "豆魚蛋肉類(高脂)", intakeKeys: ["proteinHigh"] },
+      { key: "wholeGrains", label: "全穀雜糧類", targetLabel: "全穀雜糧類", intakeKeys: ["wholeGrains"] },
+      { key: "vegetables", label: "蔬菜類", targetLabel: "蔬菜類", intakeKeys: ["vegetables"] },
+      { key: "fruits", label: "水果類", targetLabel: "水果類", intakeKeys: ["fruits"] },
+      { key: "oilsAndNuts", label: "油脂與堅果種子類", targetLabel: "油脂與堅果種子類", intakeKeys: ["oilsAndNuts"] }
+    ];
+
+    const mealList = [
+      { key: "breakfast", label: "早餐" },
+      { key: "lunch", label: "午餐" },
+      { key: "dinner", label: "晚餐" },
+      { key: "snack", label: "点心" }
+    ];
+
+    const storageKey = "pfcLogStateV1";
+    let appState = { byDate: {}, lastDate: "" };
+    let targets = { normalDay: {}, trainingDay: {} };
+    let currentDate = "";
+    let currentState = null;
+
+    const elements = {
+      dateInput: document.getElementById("dateInput"),
+      dayNote: document.getElementById("dayNote"),
+      mealGrid: document.getElementById("mealGrid"),
+      summaryTable: document.getElementById("summaryTable"),
+      macroSummary: document.getElementById("macroSummary"),
+      targetStatus: document.getElementById("targetStatus"),
+      exportFoodBtn: document.getElementById("exportFoodBtn"),
+      exportBehaviorBtn: document.getElementById("exportBehaviorBtn"),
+      targetFileInput: document.getElementById("targetFileInput"),
+      exportLayer: document.getElementById("ExportLayer")
+    };
+
+    function createEmptyMealState() {
+      const portions = {};
+      portionMeta.forEach((meta) => {
+        portions[meta.key] = 0;
+      });
+      return {
+        note: "",
+        portions,
+        images: []
+      };
+    }
+
+    function createEmptyDayState() {
+      const meals = {};
+      mealList.forEach((meal) => {
+        meals[meal.key] = createEmptyMealState();
+      });
+      return {
+        dayType: "normalDay",
+        dayNote: "",
+        meals,
+        behaviors: {
+          sleepHours: "",
+          exerciseMinutes: "",
+          steps: "",
+          waterMl: "",
+          bowelCount: "",
+          note: ""
+        }
+      };
+    }
+
+    function normalizeDayState(state) {
+      const normalized = createEmptyDayState();
+      if (!state || typeof state !== "object") {
+        return normalized;
+      }
+      normalized.dayType = state.dayType || "normalDay";
+      normalized.dayNote = state.dayNote || "";
+      mealList.forEach((meal) => {
+        const mealState = state.meals && state.meals[meal.key] ? state.meals[meal.key] : {};
+        normalized.meals[meal.key].note = mealState.note || "";
+        normalized.meals[meal.key].images = Array.isArray(mealState.images) ? mealState.images.slice() : [];
+        portionMeta.forEach((meta) => {
+          const value = mealState.portions && typeof mealState.portions[meta.key] === "number"
+            ? mealState.portions[meta.key]
+            : 0;
+          normalized.meals[meal.key].portions[meta.key] = value;
+        });
+      });
+      normalized.behaviors = {
+        sleepHours: state.behaviors ? state.behaviors.sleepHours || "" : "",
+        exerciseMinutes: state.behaviors ? state.behaviors.exerciseMinutes || "" : "",
+        steps: state.behaviors ? state.behaviors.steps || "" : "",
+        waterMl: state.behaviors ? state.behaviors.waterMl || "" : "",
+        bowelCount: state.behaviors ? state.behaviors.bowelCount || "" : "",
+        note: state.behaviors ? state.behaviors.note || "" : ""
+      };
+      return normalized;
+    }
+
+    function loadStoredState() {
+      try {
+        const raw = localStorage.getItem(storageKey);
+        if (!raw) {
+          return { byDate: {}, lastDate: "" };
+        }
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") {
+          return { byDate: {}, lastDate: "" };
+        }
+        return {
+          byDate: parsed.byDate || {},
+          lastDate: parsed.lastDate || ""
+        };
+      } catch (error) {
+        return { byDate: {}, lastDate: "" };
+      }
+    }
+
+    function saveState() {
+      try {
+        appState.byDate[currentDate] = currentState;
+        appState.lastDate = currentDate;
+        localStorage.setItem(storageKey, JSON.stringify(appState));
+      } catch (error) {
+        alert("储存空间不足");
+      }
+    }
+
+    function setCurrentDate(dateValue) {
+      currentDate = dateValue;
+      elements.dateInput.value = currentDate;
+      const savedState = appState.byDate[currentDate];
+      currentState = normalizeDayState(savedState);
+      appState.byDate[currentDate] = currentState;
+      elements.dayNote.value = currentState.dayNote;
+      updateDayTypeUI();
+      renderMeals();
+      renderBehaviors();
+      updateSummary();
+      saveState();
+    }
+
+    function updateDayTypeUI() {
+      const radios = document.querySelectorAll('input[name="dayType"]');
+      radios.forEach((radio) => {
+        radio.checked = radio.value === currentState.dayType;
+      });
+    }
+
+    function renderMeals() {
+      elements.mealGrid.innerHTML = mealList.map((meal) => {
+        return `
+          <section class="MealCard" data-meal="${meal.key}">
+            <div class="MealHeader">
+              <div class="MealTitle">${meal.label}</div>
+              <label class="ImageUploadButton">
+                + 图片
+                <input class="HiddenInput" type="file" accept="image/*,.heic,.heif" multiple data-image-input>
+              </label>
+            </div>
+            <div class="MealBody">
+              <div class="ImageGrid" data-image-grid></div>
+              <textarea class="BaseTextArea" rows="2" data-meal-note placeholder="文字说明"></textarea>
+              <div class="PortionGrid">
+                ${portionMeta.map((meta) => `
+                  <label class="PortionRow">
+                    <span class="PortionLabel">${meta.label}</span>
+                    <input class="BaseInput PortionInput" type="number" inputmode="decimal" min="0" step="0.1" data-portion-key="${meta.key}">
+                  </label>
+                `).join("")}
+              </div>
+            </div>
+          </section>
+        `;
+      }).join("");
+
+      mealList.forEach((meal) => {
+        const mealState = currentState.meals[meal.key];
+        const mealCard = elements.mealGrid.querySelector(`[data-meal="${meal.key}"]`);
+        if (!mealCard) {
+          return;
+        }
+        const noteInput = mealCard.querySelector("[data-meal-note]");
+        noteInput.value = mealState.note || "";
+        portionMeta.forEach((meta) => {
+          const input = mealCard.querySelector(`[data-portion-key="${meta.key}"]`);
+          const value = mealState.portions[meta.key];
+          input.value = value ? value : "";
+        });
+        renderMealImages(meal.key);
+      });
+    }
+
+    function renderMealImages(mealKey) {
+      const mealState = currentState.meals[mealKey];
+      const mealCard = elements.mealGrid.querySelector(`[data-meal="${mealKey}"]`);
+      if (!mealCard) {
+        return;
+      }
+      const grid = mealCard.querySelector("[data-image-grid]");
+      grid.innerHTML = "";
+      mealState.images.forEach((src, index) => {
+        const tile = document.createElement("div");
+        tile.className = "ImageTile";
+        const img = document.createElement("img");
+        img.src = src;
+        img.alt = `${mealKey}-image-${index + 1}`;
+        const removeButton = document.createElement("button");
+        removeButton.className = "IconButton";
+        removeButton.type = "button";
+        removeButton.textContent = "×";
+        removeButton.dataset.removeImage = "true";
+        removeButton.dataset.imageIndex = String(index);
+        tile.appendChild(img);
+        tile.appendChild(removeButton);
+        grid.appendChild(tile);
+      });
+    }
+
+    function renderBehaviors() {
+      const behaviorInputs = document.querySelectorAll("[data-behavior-key]");
+      behaviorInputs.forEach((input) => {
+        const key = input.dataset.behaviorKey;
+        input.value = currentState.behaviors[key] || "";
+      });
+    }
+
+    function updateSummary() {
+      const dailyPortions = calculateDailyPortions();
+      const summaryHtml = buildSummaryTable(dailyPortions);
+      elements.summaryTable.innerHTML = summaryHtml;
+      const nutrients = calculateNutrients(dailyPortions);
+      elements.macroSummary.innerHTML = buildMacroSummary(nutrients);
+    }
+
+    function calculateDailyPortions() {
+      const totals = {};
+      portionMeta.forEach((meta) => {
+        totals[meta.key] = 0;
+      });
+      mealList.forEach((meal) => {
+        const mealState = currentState.meals[meal.key];
+        portionMeta.forEach((meta) => {
+          const value = Number(mealState.portions[meta.key]) || 0;
+          totals[meta.key] += value;
+        });
+      });
+      return totals;
+    }
+
+    function calculateNutrients(portions) {
+      const totals = { protein: 0, fat: 0, carbs: 0, calories: 0 };
+      portionMeta.forEach((meta) => {
+        const amount = portions[meta.key] || 0;
+        totals.protein += amount * meta.table.protein;
+        totals.fat += amount * meta.table.fat;
+        totals.carbs += amount * meta.table.carbs;
+        totals.calories += amount * meta.table.calories;
+      });
+      return totals;
+    }
+
+    function buildSummaryTable(portions) {
+      const targetForDay = targets[currentState.dayType] || {};
+      const rowsHtml = summaryRows.map((row) => {
+        const intake = row.intakeKeys.reduce((sum, key) => sum + (portions[key] || 0), 0);
+        const target = Number(targetForDay[row.targetLabel]) || 0;
+        const delta = target - intake;
+        const deltaClass = delta > 0 ? "DeltaPositive" : delta < 0 ? "DeltaNegative" : "DeltaZero";
+        return `
+          <tr>
+            <td>${row.label}</td>
+            <td>${formatPortion(target)}</td>
+            <td>${formatPortion(intake)}</td>
+            <td class="${deltaClass}">${formatPortion(delta)}</td>
+          </tr>
+        `;
+      }).join("");
+
+      return `
+        <table class="SummaryTableTable">
+          <thead>
+            <tr>
+              <th>分类</th>
+              <th>目标</th>
+              <th>已摄入</th>
+              <th>剩余/差值</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function buildMacroSummary(nutrients) {
+      return `
+        <div class="MacroCard">
+          <div class="MacroLabel">蛋白质</div>
+          <div class="MacroValue">${formatNutrient(nutrients.protein)} g</div>
+        </div>
+        <div class="MacroCard">
+          <div class="MacroLabel">脂肪</div>
+          <div class="MacroValue">${formatNutrient(nutrients.fat)} g</div>
+        </div>
+        <div class="MacroCard">
+          <div class="MacroLabel">碳水</div>
+          <div class="MacroValue">${formatNutrient(nutrients.carbs)} g</div>
+        </div>
+        <div class="MacroCard">
+          <div class="MacroLabel">总热量</div>
+          <div class="MacroValue">${formatCalories(nutrients.calories)} kcal</div>
+        </div>
+      `;
+    }
+
+    function formatPortion(value) {
+      const rounded = Math.round(value * 10) / 10;
+      return rounded.toFixed(rounded % 1 === 0 ? 0 : 1);
+    }
+
+    function formatNutrient(value) {
+      return (Math.round(value * 10) / 10).toFixed(1);
+    }
+
+    function formatCalories(value) {
+      return String(Math.round(value));
+    }
+
+    function parseTargets(text) {
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed && typeof parsed === "object") {
+          return {
+            normalDay: parsed.normalDay || {},
+            trainingDay: parsed.trainingDay || {}
+          };
+        }
+      } catch (error) {
+        return {
+          normalDay: parseSection(text, "normalDay"),
+          trainingDay: parseSection(text, "trainingDay")
+        };
+      }
+      return {
+        normalDay: parseSection(text, "normalDay"),
+        trainingDay: parseSection(text, "trainingDay")
+      };
+    }
+
+    function hasTargets(targetSet) {
+      if (!targetSet || typeof targetSet !== "object") {
+        return false;
+      }
+      const normalKeys = targetSet.normalDay ? Object.keys(targetSet.normalDay) : [];
+      const trainingKeys = targetSet.trainingDay ? Object.keys(targetSet.trainingDay) : [];
+      return normalKeys.length > 0 || trainingKeys.length > 0;
+    }
+
+    function parseSection(text, sectionName) {
+      const sectionText = extractSection(text, sectionName);
+      if (!sectionText) {
+        return {};
+      }
+      const map = {};
+      const regex = /"([^"]+)"\s*:\s*([0-9.]+)/g;
+      let match = null;
+      while ((match = regex.exec(sectionText)) !== null) {
+        map[match[1]] = Number(match[2]);
+      }
+      return map;
+    }
+
+    function extractSection(text, sectionName) {
+      const keyIndex = text.indexOf(`"${sectionName}"`);
+      if (keyIndex === -1) {
+        return "";
+      }
+      const braceIndex = text.indexOf("{", keyIndex);
+      if (braceIndex === -1) {
+        return "";
+      }
+      let depth = 0;
+      for (let i = braceIndex; i < text.length; i += 1) {
+        const char = text[i];
+        if (char === "{") {
+          depth += 1;
+        } else if (char === "}") {
+          depth -= 1;
+          if (depth === 0) {
+            return text.slice(braceIndex + 1, i);
+          }
+        }
+      }
+      return "";
+    }
+
+    async function loadTargets() {
+      try {
+        const response = await fetch("data.txt", { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error("目标文件读取失败");
+        }
+        const text = await response.text();
+        const parsedTargets = parseTargets(text);
+        if (hasTargets(parsedTargets)) {
+          targets = parsedTargets;
+          renderTargetStatus(true);
+        } else {
+          renderTargetStatus(false);
+        }
+        updateSummary();
+      } catch (error) {
+        renderTargetStatus(false);
+      }
+    }
+
+    function renderTargetStatus(loaded) {
+      if (loaded) {
+        elements.targetStatus.textContent = "目标已载入";
+        return;
+      }
+      elements.targetStatus.innerHTML = "<button id=\"loadTargetsButton\" class=\"GhostButton\" type=\"button\">加载目标</button>";
+      const button = document.getElementById("loadTargetsButton");
+      button.addEventListener("click", () => {
+        elements.targetFileInput.click();
+      });
+    }
+
+    function updateMealPortion(mealKey, portionKey, value) {
+      const safeValue = Math.max(0, Number.isFinite(value) ? value : 0);
+      currentState.meals[mealKey].portions[portionKey] = safeValue;
+      saveState();
+      updateSummary();
+    }
+
+    function updateMealNote(mealKey, value) {
+      currentState.meals[mealKey].note = value || "";
+      saveState();
+    }
+
+    function updateDayNote(value) {
+      currentState.dayNote = value || "";
+      saveState();
+    }
+
+    function updateBehaviorValue(key, value) {
+      currentState.behaviors[key] = value;
+      saveState();
+    }
+
+    function updateDayType(value) {
+      currentState.dayType = value;
+      saveState();
+      updateSummary();
+    }
+
+    async function handleImagesSelected(mealKey, files) {
+      const list = Array.from(files);
+      if (!list.length) {
+        return;
+      }
+      for (const file of list) {
+        try {
+          const dataUrl = await processImageFile(file);
+          currentState.meals[mealKey].images.push(dataUrl);
+        } catch (error) {
+          alert("图片处理失败");
+        }
+      }
+      saveState();
+      renderMealImages(mealKey);
+    }
+
+    function removeMealImage(mealKey, index) {
+      currentState.meals[mealKey].images.splice(index, 1);
+      saveState();
+      renderMealImages(mealKey);
+    }
+
+    function isHeicFile(file) {
+      return file.type === "image/heic" || file.type === "image/heif" || /\.heic$/i.test(file.name) || /\.heif$/i.test(file.name);
+    }
+
+    async function processImageFile(file) {
+      let workingBlob = file;
+      if (isHeicFile(file)) {
+        if (window.heic2any) {
+          const converted = await window.heic2any({
+            blob: file,
+            toType: "image/jpeg",
+            quality: 0.9
+          });
+          workingBlob = Array.isArray(converted) ? converted[0] : converted;
+        } else {
+          throw new Error("heic missing");
+        }
+      }
+      const dataUrl = await readAsDataUrl(workingBlob);
+      const img = await loadImage(dataUrl);
+      return compressImage(img, 1600, 0.82);
+    }
+
+    function readAsDataUrl(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("image load error"));
+        img.src = src;
+      });
+    }
+
+    function compressImage(image, maxSize, quality) {
+      const ratio = Math.min(1, maxSize / Math.max(image.width, image.height));
+      const width = Math.round(image.width * ratio);
+      const height = Math.round(image.height * ratio);
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      context.drawImage(image, 0, 0, width, height);
+      return canvas.toDataURL("image/jpeg", quality);
+    }
+
+    function buildExportFoodCard() {
+      const dailyPortions = calculateDailyPortions();
+      const nutrients = calculateNutrients(dailyPortions);
+      const targetForDay = targets[currentState.dayType] || {};
+      const dayNoteHtml = currentState.dayNote
+        ? `<div class="ExportNote">${escapeHtml(currentState.dayNote)}</div>`
+        : "";
+      const mealBlocks = mealList.map((meal) => {
+        const mealState = currentState.meals[meal.key];
+        const totalPortion = portionMeta.reduce((sum, meta) => sum + (mealState.portions[meta.key] || 0), 0);
+        if (totalPortion === 0) {
+          return "";
+        }
+        const portionLines = portionMeta
+          .filter((meta) => (mealState.portions[meta.key] || 0) > 0)
+          .map((meta) => {
+            return `
+              <tr>
+                <td>${meta.label}</td>
+                <td>${formatPortion(mealState.portions[meta.key])}</td>
+              </tr>
+            `;
+          })
+          .join("");
+        const imageHtml = mealState.images.length
+          ? `<div class="ExportImageGrid">${mealState.images.map((src) => `<img src="${src}" alt="${meal.label}">`).join("")}</div>`
+          : "";
+        const noteHtml = mealState.note ? `<div class="ExportNote">${escapeHtml(mealState.note)}</div>` : "";
+        return `
+          <div class="ExportMeal">
+            <div class="ExportMealTitle">${meal.label}</div>
+            ${imageHtml}
+            ${noteHtml}
+            <table class="ExportTable">
+              <tbody>
+                ${portionLines}
+              </tbody>
+            </table>
+          </div>
+        `;
+      }).join("");
+
+      const summaryRowsHtml = summaryRows.map((row) => {
+        const intake = row.intakeKeys.reduce((sum, key) => sum + (dailyPortions[key] || 0), 0);
+        const target = Number(targetForDay[row.targetLabel]) || 0;
+        const delta = target - intake;
+        return `
+          <tr>
+            <td>${row.label}</td>
+            <td>${formatPortion(target)}</td>
+            <td>${formatPortion(intake)}</td>
+            <td>${formatPortion(delta)}</td>
+          </tr>
+        `;
+      }).join("");
+
+      return `
+        <div class="ExportCard">
+          <div class="ExportTitle">饮食记录 ${currentDate}</div>
+          ${dayNoteHtml}
+          ${mealBlocks}
+          <table class="ExportTable">
+            <thead>
+              <tr>
+                <th>分类</th>
+                <th>目标</th>
+                <th>已摄入</th>
+                <th>剩余/差值</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${summaryRowsHtml}
+            </tbody>
+          </table>
+          <div class="ExportMacroGrid">
+            <div class="ExportMacroCard">
+              <div class="ExportLabel">蛋白质</div>
+              <div class="ExportValue">${formatNutrient(nutrients.protein)} g</div>
+            </div>
+            <div class="ExportMacroCard">
+              <div class="ExportLabel">脂肪</div>
+              <div class="ExportValue">${formatNutrient(nutrients.fat)} g</div>
+            </div>
+            <div class="ExportMacroCard">
+              <div class="ExportLabel">碳水</div>
+              <div class="ExportValue">${formatNutrient(nutrients.carbs)} g</div>
+            </div>
+            <div class="ExportMacroCard">
+              <div class="ExportLabel">总热量</div>
+              <div class="ExportValue">${formatCalories(nutrients.calories)} kcal</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function buildExportBehaviorCard() {
+      const behaviors = currentState.behaviors;
+      const formatValue = (value) => value === "" ? "—" : value;
+      return `
+        <div class="ExportCard">
+          <div class="ExportTitle">行为记录 ${currentDate}</div>
+          <div class="ExportBehaviorGrid">
+            <div class="ExportBehaviorItem">
+              <div class="ExportLabel">睡眠时长</div>
+              <div class="ExportValue">${formatValue(behaviors.sleepHours)}</div>
+            </div>
+            <div class="ExportBehaviorItem">
+              <div class="ExportLabel">运动分钟数</div>
+              <div class="ExportValue">${formatValue(behaviors.exerciseMinutes)}</div>
+            </div>
+            <div class="ExportBehaviorItem">
+              <div class="ExportLabel">步数</div>
+              <div class="ExportValue">${formatValue(behaviors.steps)}</div>
+            </div>
+            <div class="ExportBehaviorItem">
+              <div class="ExportLabel">饮水量</div>
+              <div class="ExportValue">${formatValue(behaviors.waterMl)}</div>
+            </div>
+            <div class="ExportBehaviorItem">
+              <div class="ExportLabel">排便次数</div>
+              <div class="ExportValue">${formatValue(behaviors.bowelCount)}</div>
+            </div>
+            <div class="ExportBehaviorItem">
+              <div class="ExportLabel">备注</div>
+              <div class="ExportValue">${formatValue(escapeHtml(behaviors.note))}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    async function exportCard(cardHtml, fileName) {
+      if (typeof html2canvas !== "function") {
+        alert("导出模块未载入");
+        return;
+      }
+      elements.exportLayer.innerHTML = cardHtml;
+      const card = elements.exportLayer.firstElementChild;
+      const scale = Math.min(2, window.devicePixelRatio || 1);
+      const canvas = await html2canvas(card, {
+        backgroundColor: null,
+        scale,
+        useCORS: true
+      });
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = fileName;
+      link.click();
+      elements.exportLayer.innerHTML = "";
+    }
+
+    function bindEvents() {
+      elements.dateInput.addEventListener("change", (event) => {
+        const value = event.target.value;
+        if (value) {
+          setCurrentDate(value);
+        }
+      });
+
+      elements.dayNote.addEventListener("input", (event) => {
+        updateDayNote(event.target.value);
+      });
+
+      document.querySelectorAll('input[name="dayType"]').forEach((radio) => {
+        radio.addEventListener("change", (event) => {
+          updateDayType(event.target.value);
+        });
+      });
+
+      elements.mealGrid.addEventListener("input", (event) => {
+        const target = event.target;
+        if (target.matches("[data-portion-key]")) {
+          const mealCard = target.closest("[data-meal]");
+          if (!mealCard) {
+            return;
+          }
+          const mealKey = mealCard.dataset.meal;
+          const portionKey = target.dataset.portionKey;
+          const value = parseFloat(target.value);
+          updateMealPortion(mealKey, portionKey, Number.isNaN(value) ? 0 : value);
+        }
+        if (target.matches("[data-meal-note]")) {
+          const mealCard = target.closest("[data-meal]");
+          if (!mealCard) {
+            return;
+          }
+          updateMealNote(mealCard.dataset.meal, target.value);
+        }
+      });
+
+      elements.mealGrid.addEventListener("change", (event) => {
+        const target = event.target;
+        if (target.matches("[data-image-input]")) {
+          const mealCard = target.closest("[data-meal]");
+          if (!mealCard) {
+            return;
+          }
+          const mealKey = mealCard.dataset.meal;
+          handleImagesSelected(mealKey, target.files);
+          target.value = "";
+        }
+      });
+
+      elements.mealGrid.addEventListener("click", (event) => {
+        const target = event.target.closest("[data-remove-image]");
+        if (!target) {
+          return;
+        }
+        const mealCard = target.closest("[data-meal]");
+        if (!mealCard) {
+          return;
+        }
+        const mealKey = mealCard.dataset.meal;
+        const index = Number(target.dataset.imageIndex);
+        removeMealImage(mealKey, index);
+      });
+
+      document.querySelectorAll("[data-behavior-key]").forEach((input) => {
+        input.addEventListener("input", (event) => {
+          const key = event.target.dataset.behaviorKey;
+          updateBehaviorValue(key, event.target.value);
+        });
+      });
+
+      elements.exportFoodBtn.addEventListener("click", async () => {
+        const cardHtml = buildExportFoodCard();
+        await exportCard(cardHtml, `饮食记录_${currentDate}.png`);
+      });
+
+      elements.exportBehaviorBtn.addEventListener("click", async () => {
+        const cardHtml = buildExportBehaviorCard();
+        await exportCard(cardHtml, `行为记录_${currentDate}.png`);
+      });
+
+      elements.targetFileInput.addEventListener("change", async (event) => {
+        const file = event.target.files[0];
+        if (!file) {
+          return;
+        }
+        try {
+          const text = await file.text();
+          const parsedTargets = parseTargets(text);
+          if (!hasTargets(parsedTargets)) {
+            throw new Error("invalid targets");
+          }
+          targets = parsedTargets;
+          renderTargetStatus(true);
+          updateSummary();
+        } catch (error) {
+          alert("目标读取失败");
+        }
+      });
+    }
+
+    function initializeApp() {
+      appState = loadStoredState();
+      const today = getLocalDateString();
+      const initialDate = today;
+      setCurrentDate(initialDate);
+      bindEvents();
+      loadTargets();
+    }
+
+    function getLocalDateString() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const day = String(now.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+
+    initializeApp();
+  </script>
+</body>
+</html>
