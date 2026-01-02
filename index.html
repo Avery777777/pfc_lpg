@@ -488,6 +488,57 @@
       border: 1px solid rgba(255, 255, 255, 0.08);
     }
 
+    .ExportPreview {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(7, 10, 14, 0.88);
+      z-index: 100;
+    }
+
+    .ExportPreview.IsVisible {
+      display: flex;
+    }
+
+    .ExportPreviewCard {
+      width: min(720px, 92vw);
+      max-height: 90vh;
+      background: var(--colorPanel);
+      border-radius: 20px;
+      padding: 16px;
+      border: 1px solid var(--colorStroke);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .ExportPreviewTitle {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .ExportPreviewImage {
+      width: 100%;
+      max-height: 68vh;
+      border-radius: 12px;
+      object-fit: contain;
+      background: #0a0f14;
+    }
+
+    .ExportPreviewHint {
+      color: var(--colorMuted);
+      font-size: 13px;
+    }
+
+    .ExportPreviewActions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
     @media (max-width: 980px) {
       .TopGrid {
         grid-template-columns: 1fr;
@@ -620,6 +671,16 @@
   </div>
 
   <div id="ExportLayer" class="ExportLayer"></div>
+  <div id="ExportPreview" class="ExportPreview">
+    <div class="ExportPreviewCard">
+      <div class="ExportPreviewTitle">图片已生成</div>
+      <img id="ExportPreviewImage" class="ExportPreviewImage" alt="导出预览">
+      <div id="ExportPreviewHint" class="ExportPreviewHint"></div>
+      <div class="ExportPreviewActions">
+        <button class="GhostButton" type="button" data-preview-close>关闭</button>
+      </div>
+    </div>
+  </div>
 
   <input id="targetFileInput" class="HiddenInput" type="file" accept=".txt,.json">
 
@@ -697,7 +758,10 @@
       exportFoodBtn: document.getElementById("exportFoodBtn"),
       exportBehaviorBtn: document.getElementById("exportBehaviorBtn"),
       targetFileInput: document.getElementById("targetFileInput"),
-      exportLayer: document.getElementById("ExportLayer")
+      exportLayer: document.getElementById("ExportLayer"),
+      exportPreview: document.getElementById("ExportPreview"),
+      exportPreviewImage: document.getElementById("ExportPreviewImage"),
+      exportPreviewHint: document.getElementById("ExportPreviewHint")
     };
 
     function createEmptyMealState() {
@@ -1757,6 +1821,88 @@
       return Promise.all(promises);
     }
 
+    function isIosDevice() {
+      const isAppleMobile = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const isIpadOs = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+      return isAppleMobile || isIpadOs;
+    }
+
+    function canvasToBlob(canvas) {
+      return new Promise((resolve) => {
+        canvas.toBlob((blob) => resolve(blob), "image/png");
+      });
+    }
+
+    async function tryNativeShare(blob, fileName) {
+      if (!navigator.share || !navigator.canShare) {
+        return false;
+      }
+      const file = new File([blob], fileName, { type: "image/png" });
+      if (!navigator.canShare({ files: [file] })) {
+        return false;
+      }
+      try {
+        await navigator.share({ files: [file], title: fileName });
+        return true;
+      } catch (error) {
+        if (error && error.name === "AbortError") {
+          return true;
+        }
+        return false;
+      }
+    }
+
+    function showExportPreview(url, hintText) {
+      if (!elements.exportPreview || !elements.exportPreviewImage) {
+        alert("导出失败");
+        return;
+      }
+      const previousUrl = elements.exportPreview.dataset.previewUrl;
+      if (previousUrl && previousUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(previousUrl);
+      }
+      elements.exportPreviewImage.src = url;
+      if (elements.exportPreviewHint) {
+        elements.exportPreviewHint.textContent = hintText || "";
+      }
+      elements.exportPreview.classList.add("IsVisible");
+      elements.exportPreview.dataset.previewUrl = url;
+    }
+
+    function hideExportPreview() {
+      if (!elements.exportPreview || !elements.exportPreviewImage) {
+        return;
+      }
+      const previewUrl = elements.exportPreview.dataset.previewUrl;
+      if (previewUrl && previewUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      elements.exportPreviewImage.src = "";
+      if (elements.exportPreviewHint) {
+        elements.exportPreviewHint.textContent = "";
+      }
+      elements.exportPreview.dataset.previewUrl = "";
+      elements.exportPreview.classList.remove("IsVisible");
+    }
+
+    function triggerDownload(blob, fileName) {
+      if (!blob) {
+        return false;
+      }
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      link.rel = "noopener";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+      }, 1000);
+      return true;
+    }
+
     async function exportCard(cardHtml, fileName) {
       if (typeof html2canvas !== "function") {
         alert("导出模块未载入");
@@ -1766,16 +1912,45 @@
       const card = elements.exportLayer.firstElementChild;
       await waitForImages(card);
       const scale = Math.min(2.5, Math.max(2, window.devicePixelRatio || 1));
-      const canvas = await html2canvas(card, {
-        backgroundColor: null,
-        scale,
-        useCORS: true
-      });
-      const link = document.createElement("a");
-      link.href = canvas.toDataURL("image/png");
-      link.download = fileName;
-      link.click();
+      let canvas = null;
+      try {
+        canvas = await html2canvas(card, {
+          backgroundColor: null,
+          scale,
+          useCORS: true
+        });
+      } catch (error) {
+        elements.exportLayer.innerHTML = "";
+        alert("导出失败，请重试");
+        return;
+      }
       elements.exportLayer.innerHTML = "";
+      let blob = null;
+      try {
+        blob = await canvasToBlob(canvas);
+      } catch (error) {
+        blob = null;
+      }
+
+      if (blob && await tryNativeShare(blob, fileName)) {
+        return;
+      }
+
+      if (isIosDevice()) {
+        const previewUrl = blob ? URL.createObjectURL(blob) : canvas.toDataURL("image/png");
+        showExportPreview(previewUrl, "iOS 请长按图片保存");
+        return;
+      }
+
+      const downloaded = triggerDownload(blob, fileName);
+      if (!downloaded) {
+        try {
+          const previewUrl = blob ? URL.createObjectURL(blob) : canvas.toDataURL("image/png");
+          showExportPreview(previewUrl, "导出失败，请长按图片保存");
+        } catch (error) {
+          alert("导出失败，请重试");
+        }
+      }
     }
 
     function bindEvents() {
@@ -1880,6 +2055,21 @@
         const cardHtml = await buildExportBehaviorCard();
         await exportCard(cardHtml, `行为记录_${currentDate}.png`);
       });
+
+      const previewCloseButton = document.querySelector("[data-preview-close]");
+      if (previewCloseButton) {
+        previewCloseButton.addEventListener("click", () => {
+          hideExportPreview();
+        });
+      }
+
+      if (elements.exportPreview) {
+        elements.exportPreview.addEventListener("click", (event) => {
+          if (event.target === elements.exportPreview) {
+            hideExportPreview();
+          }
+        });
+      }
 
       elements.targetFileInput.addEventListener("change", async (event) => {
         const file = event.target.files[0];
