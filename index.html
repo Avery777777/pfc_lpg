@@ -248,7 +248,8 @@
     .ImageTile img {
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      object-fit: contain;
+      background: #0a0f14;
       display: block;
     }
 
@@ -296,6 +297,13 @@
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 14px;
+    }
+
+    .BehaviorImageBlock {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 16px;
     }
 
     .SummaryTable {
@@ -411,7 +419,8 @@
     .ExportImageGrid img {
       width: 100%;
       border-radius: 12px;
-      object-fit: cover;
+      object-fit: contain;
+      background: #0a0f14;
       aspect-ratio: 4 / 3;
     }
 
@@ -565,6 +574,13 @@
           <button id="exportBehaviorBtn" class="GhostButton" type="button">导出行为图</button>
         </div>
       </div>
+      <div class="BehaviorImageBlock">
+        <label class="ImageUploadButton">
+          + 图片
+          <input class="HiddenInput" type="file" accept="image/*,.heic,.heif" multiple data-behavior-image-input>
+        </label>
+        <div class="ImageGrid" data-behavior-image-grid></div>
+      </div>
       <div class="BehaviorGrid">
         <div class="FieldBlock">
           <label class="FieldLabel" for="sleepHours">睡眠时长</label>
@@ -659,10 +675,17 @@
     ];
 
     const storageKey = "pfcLogStateV1";
+    const targetStorageKey = "pfcLogTargetsV1";
+    const imageDbName = "pfcLogImagesV1";
+    const imageStoreName = "images";
+    const imageUrlCache = new Map();
+    const mealRenderTokens = {};
     let appState = { byDate: {}, lastDate: "" };
     let targets = { normalDay: {}, trainingDay: {} };
     let currentDate = "";
     let currentState = null;
+    let behaviorRenderToken = 0;
+    let imageDbPromise = null;
 
     const elements = {
       dateInput: document.getElementById("dateInput"),
@@ -704,7 +727,8 @@
           steps: "",
           waterMl: "",
           bowelCount: "",
-          note: ""
+          note: "",
+          images: []
         }
       };
     }
@@ -733,9 +757,262 @@
         steps: state.behaviors ? state.behaviors.steps || "" : "",
         waterMl: state.behaviors ? state.behaviors.waterMl || "" : "",
         bowelCount: state.behaviors ? state.behaviors.bowelCount || "" : "",
-        note: state.behaviors ? state.behaviors.note || "" : ""
+        note: state.behaviors ? state.behaviors.note || "" : "",
+        images: state.behaviors && Array.isArray(state.behaviors.images) ? state.behaviors.images.slice() : []
       };
       return normalized;
+    }
+
+    function openImageDb() {
+      if (imageDbPromise) {
+        return imageDbPromise;
+      }
+      imageDbPromise = new Promise((resolve, reject) => {
+        const request = indexedDB.open(imageDbName, 1);
+        request.onupgradeneeded = () => {
+          const db = request.result;
+          if (!db.objectStoreNames.contains(imageStoreName)) {
+            db.createObjectStore(imageStoreName, { keyPath: "id" });
+          }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      return imageDbPromise;
+    }
+
+    function createImageId() {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        return window.crypto.randomUUID();
+      }
+      return `img_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    }
+
+    async function saveImageBlob(blob) {
+      const db = await openImageDb();
+      const id = createImageId();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(imageStoreName, "readwrite");
+        const store = transaction.objectStore(imageStoreName);
+        store.put({ id, blob, createdAt: Date.now() });
+        transaction.oncomplete = () => resolve(id);
+        transaction.onerror = () => reject(transaction.error);
+      });
+    }
+
+    async function getImageBlob(id) {
+      const db = await openImageDb();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(imageStoreName, "readonly");
+        const store = transaction.objectStore(imageStoreName);
+        const request = store.get(id);
+        request.onsuccess = () => {
+          resolve(request.result ? request.result.blob : null);
+        };
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async function deleteImage(id) {
+      const db = await openImageDb();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(imageStoreName, "readwrite");
+        const store = transaction.objectStore(imageStoreName);
+        store.delete(id);
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+      });
+    }
+
+    function isDataUrl(value) {
+      return typeof value === "string" && value.startsWith("data:");
+    }
+
+    function cacheImageUrl(id, blob) {
+      if (!id || !blob) {
+        return "";
+      }
+      if (imageUrlCache.has(id)) {
+        return imageUrlCache.get(id);
+      }
+      const url = URL.createObjectURL(blob);
+      imageUrlCache.set(id, url);
+      return url;
+    }
+
+    async function getImageUrl(id) {
+      if (!id) {
+        return "";
+      }
+      if (isDataUrl(id)) {
+        return id;
+      }
+      if (imageUrlCache.has(id)) {
+        return imageUrlCache.get(id);
+      }
+      try {
+        const blob = await getImageBlob(id);
+        if (!blob) {
+          return "";
+        }
+        return cacheImageUrl(id, blob);
+      } catch (error) {
+        return "";
+      }
+    }
+
+    function revokeImageUrl(id) {
+      if (!imageUrlCache.has(id)) {
+        return;
+      }
+      const url = imageUrlCache.get(id);
+      URL.revokeObjectURL(url);
+      imageUrlCache.delete(id);
+    }
+
+    function collectImageIdsFromState(state) {
+      const ids = new Set();
+      if (!state) {
+        return ids;
+      }
+      mealList.forEach((meal) => {
+        const mealState = state.meals && state.meals[meal.key];
+        if (!mealState || !Array.isArray(mealState.images)) {
+          return;
+        }
+        mealState.images.forEach((id) => {
+          if (id && !isDataUrl(id)) {
+            ids.add(id);
+          }
+        });
+      });
+      if (state.behaviors && Array.isArray(state.behaviors.images)) {
+        state.behaviors.images.forEach((id) => {
+          if (id && !isDataUrl(id)) {
+            ids.add(id);
+          }
+        });
+      }
+      return ids;
+    }
+
+    function pruneImageCache(activeIds) {
+      imageUrlCache.forEach((url, id) => {
+        if (!activeIds.has(id)) {
+          URL.revokeObjectURL(url);
+          imageUrlCache.delete(id);
+        }
+      });
+    }
+
+    async function resolveImageUrls(ids) {
+      const list = Array.isArray(ids) ? ids : [];
+      const sources = await Promise.all(list.map((id) => getImageUrl(id)));
+      return sources;
+    }
+
+    async function dataUrlToBlob(dataUrl) {
+      const response = await fetch(dataUrl);
+      return response.blob();
+    }
+
+    async function migrateLegacyImages() {
+      const dayKeys = Object.keys(appState.byDate || {});
+      if (!dayKeys.length) {
+        return;
+      }
+      let changed = false;
+      for (const dayKey of dayKeys) {
+        const dayState = normalizeDayState(appState.byDate[dayKey]);
+        appState.byDate[dayKey] = dayState;
+        for (const meal of mealList) {
+          const mealState = dayState.meals[meal.key];
+          if (!Array.isArray(mealState.images)) {
+            mealState.images = [];
+          }
+          const migrated = [];
+          for (const entry of mealState.images) {
+            if (isDataUrl(entry)) {
+              try {
+                const blob = await dataUrlToBlob(entry);
+                const id = await saveImageBlob(blob);
+                if (dayKey === currentDate) {
+                  cacheImageUrl(id, blob);
+                }
+                migrated.push(id);
+                changed = true;
+              } catch (error) {
+                migrated.push(entry);
+              }
+            } else {
+              migrated.push(entry);
+            }
+          }
+          mealState.images = migrated;
+        }
+        if (!Array.isArray(dayState.behaviors.images)) {
+          dayState.behaviors.images = [];
+        }
+        const behaviorMigrated = [];
+        for (const entry of dayState.behaviors.images) {
+          if (isDataUrl(entry)) {
+            try {
+              const blob = await dataUrlToBlob(entry);
+              const id = await saveImageBlob(blob);
+              if (dayKey === currentDate) {
+                cacheImageUrl(id, blob);
+              }
+              behaviorMigrated.push(id);
+              changed = true;
+            } catch (error) {
+              behaviorMigrated.push(entry);
+            }
+          } else {
+            behaviorMigrated.push(entry);
+          }
+        }
+        dayState.behaviors.images = behaviorMigrated;
+      }
+      if (changed) {
+        if (currentDate && appState.byDate[currentDate]) {
+          currentState = appState.byDate[currentDate];
+        }
+        saveState();
+        renderMeals();
+        renderBehaviors();
+      }
+    }
+
+    function isDayStateEmpty(state) {
+      if (!state || typeof state !== "object") {
+        return true;
+      }
+      if (state.dayNote && state.dayNote.trim()) {
+        return false;
+      }
+      for (const meal of mealList) {
+        const mealState = state.meals && state.meals[meal.key] ? state.meals[meal.key] : null;
+        if (!mealState) {
+          continue;
+        }
+        if (mealState.note && mealState.note.trim()) {
+          return false;
+        }
+        if (Array.isArray(mealState.images) && mealState.images.length) {
+          return false;
+        }
+        for (const meta of portionMeta) {
+          if (Number(mealState.portions && mealState.portions[meta.key]) > 0) {
+            return false;
+          }
+        }
+      }
+      const behaviors = state.behaviors || {};
+      if (Array.isArray(behaviors.images) && behaviors.images.length) {
+        return false;
+      }
+      const behaviorKeys = ["sleepHours", "exerciseMinutes", "steps", "waterMl", "bowelCount", "note"];
+      return !behaviorKeys.some((key) => behaviors[key] !== "");
     }
 
     function loadStoredState() {
@@ -757,6 +1034,33 @@
       }
     }
 
+    function loadStoredTargets() {
+      try {
+        const raw = localStorage.getItem(targetStorageKey);
+        if (!raw) {
+          return { normalDay: {}, trainingDay: {} };
+        }
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") {
+          return { normalDay: {}, trainingDay: {} };
+        }
+        return {
+          normalDay: parsed.normalDay || {},
+          trainingDay: parsed.trainingDay || {}
+        };
+      } catch (error) {
+        return { normalDay: {}, trainingDay: {} };
+      }
+    }
+
+    function saveStoredTargets(targetSet) {
+      try {
+        localStorage.setItem(targetStorageKey, JSON.stringify(targetSet));
+      } catch (error) {
+        return;
+      }
+    }
+
     function saveState() {
       try {
         appState.byDate[currentDate] = currentState;
@@ -767,12 +1071,15 @@
       }
     }
 
-    function setCurrentDate(dateValue) {
+    function setCurrentDate(dateValue, options = {}) {
+      const { keepCurrentData = false } = options;
+      const savedState = appState.byDate[dateValue];
+      const shouldKeep = keepCurrentData && !isDayStateEmpty(currentState) && isDayStateEmpty(savedState);
       currentDate = dateValue;
       elements.dateInput.value = currentDate;
-      const savedState = appState.byDate[currentDate];
-      currentState = normalizeDayState(savedState);
+      currentState = shouldKeep ? normalizeDayState(currentState) : normalizeDayState(savedState);
       appState.byDate[currentDate] = currentState;
+      pruneImageCache(collectImageIdsFromState(currentState));
       elements.dayNote.value = currentState.dayNote;
       updateDayTypeUI();
       renderMeals();
@@ -839,22 +1146,37 @@
         return;
       }
       const grid = mealCard.querySelector("[data-image-grid]");
+      const renderToken = (mealRenderTokens[mealKey] || 0) + 1;
+      mealRenderTokens[mealKey] = renderToken;
       grid.innerHTML = "";
-      mealState.images.forEach((src, index) => {
-        const tile = document.createElement("div");
-        tile.className = "ImageTile";
-        const img = document.createElement("img");
-        img.src = src;
-        img.alt = `${mealKey}-image-${index + 1}`;
-        const removeButton = document.createElement("button");
-        removeButton.className = "IconButton";
-        removeButton.type = "button";
-        removeButton.textContent = "×";
-        removeButton.dataset.removeImage = "true";
-        removeButton.dataset.imageIndex = String(index);
-        tile.appendChild(img);
-        tile.appendChild(removeButton);
-        grid.appendChild(tile);
+      const imageIds = Array.isArray(mealState.images) ? mealState.images.slice() : [];
+      const renderDate = currentDate;
+      resolveImageUrls(imageIds).then((sources) => {
+        if (mealRenderTokens[mealKey] !== renderToken || currentDate !== renderDate) {
+          return;
+        }
+        grid.innerHTML = "";
+        sources.forEach((src, index) => {
+          if (!src) {
+            return;
+          }
+          const tile = document.createElement("div");
+          tile.className = "ImageTile";
+          const img = document.createElement("img");
+          img.src = src;
+          img.alt = `${mealKey}-image-${index + 1}`;
+          const removeButton = document.createElement("button");
+          removeButton.className = "IconButton";
+          removeButton.type = "button";
+          removeButton.textContent = "×";
+          removeButton.dataset.removeImage = "true";
+          removeButton.dataset.imageIndex = String(index);
+          tile.appendChild(img);
+          tile.appendChild(removeButton);
+          grid.appendChild(tile);
+        });
+      }).catch(() => {
+        return;
       });
     }
 
@@ -863,6 +1185,46 @@
       behaviorInputs.forEach((input) => {
         const key = input.dataset.behaviorKey;
         input.value = currentState.behaviors[key] || "";
+      });
+      renderBehaviorImages();
+    }
+
+    function renderBehaviorImages() {
+      const grid = document.querySelector("[data-behavior-image-grid]");
+      if (!grid) {
+        return;
+      }
+      behaviorRenderToken += 1;
+      const renderToken = behaviorRenderToken;
+      grid.innerHTML = "";
+      const imageIds = Array.isArray(currentState.behaviors.images) ? currentState.behaviors.images.slice() : [];
+      const renderDate = currentDate;
+      resolveImageUrls(imageIds).then((sources) => {
+        if (behaviorRenderToken !== renderToken || currentDate !== renderDate) {
+          return;
+        }
+        grid.innerHTML = "";
+        sources.forEach((src, index) => {
+          if (!src) {
+            return;
+          }
+          const tile = document.createElement("div");
+          tile.className = "ImageTile";
+          const img = document.createElement("img");
+          img.src = src;
+          img.alt = `behavior-image-${index + 1}`;
+          const removeButton = document.createElement("button");
+          removeButton.className = "IconButton";
+          removeButton.type = "button";
+          removeButton.textContent = "×";
+          removeButton.dataset.removeBehaviorImage = "true";
+          removeButton.dataset.imageIndex = String(index);
+          tile.appendChild(img);
+          tile.appendChild(removeButton);
+          grid.appendChild(tile);
+        });
+      }).catch(() => {
+        return;
       });
     }
 
@@ -1038,6 +1400,12 @@
     }
 
     async function loadTargets() {
+      const cachedTargets = loadStoredTargets();
+      if (hasTargets(cachedTargets)) {
+        targets = cachedTargets;
+        renderTargetStatus(true);
+        updateSummary();
+      }
       try {
         const response = await fetch("data.txt", { cache: "no-store" });
         if (!response.ok) {
@@ -1047,13 +1415,18 @@
         const parsedTargets = parseTargets(text);
         if (hasTargets(parsedTargets)) {
           targets = parsedTargets;
+          saveStoredTargets(targets);
           renderTargetStatus(true);
         } else {
-          renderTargetStatus(false);
+          if (!hasTargets(targets)) {
+            renderTargetStatus(false);
+          }
         }
         updateSummary();
       } catch (error) {
-        renderTargetStatus(false);
+        if (!hasTargets(targets)) {
+          renderTargetStatus(false);
+        }
       }
     }
 
@@ -1104,8 +1477,10 @@
       }
       for (const file of list) {
         try {
-          const dataUrl = await processImageFile(file);
-          currentState.meals[mealKey].images.push(dataUrl);
+          const blob = await processImageFile(file);
+          const imageId = await saveImageBlob(blob);
+          cacheImageUrl(imageId, blob);
+          currentState.meals[mealKey].images.push(imageId);
         } catch (error) {
           alert("图片处理失败");
         }
@@ -1115,9 +1490,46 @@
     }
 
     function removeMealImage(mealKey, index) {
-      currentState.meals[mealKey].images.splice(index, 1);
+      const removed = currentState.meals[mealKey].images.splice(index, 1);
       saveState();
       renderMealImages(mealKey);
+      if (removed[0] && !isDataUrl(removed[0])) {
+        revokeImageUrl(removed[0]);
+        deleteImage(removed[0]).catch(() => {
+          return;
+        });
+      }
+    }
+
+    async function handleBehaviorImagesSelected(files) {
+      const list = Array.from(files);
+      if (!list.length) {
+        return;
+      }
+      for (const file of list) {
+        try {
+          const blob = await processImageFile(file);
+          const imageId = await saveImageBlob(blob);
+          cacheImageUrl(imageId, blob);
+          currentState.behaviors.images.push(imageId);
+        } catch (error) {
+          alert("图片处理失败");
+        }
+      }
+      saveState();
+      renderBehaviorImages();
+    }
+
+    function removeBehaviorImage(index) {
+      const removed = currentState.behaviors.images.splice(index, 1);
+      saveState();
+      renderBehaviorImages();
+      if (removed[0] && !isDataUrl(removed[0])) {
+        revokeImageUrl(removed[0]);
+        deleteImage(removed[0]).catch(() => {
+          return;
+        });
+      }
     }
 
     function isHeicFile(file) {
@@ -1140,7 +1552,7 @@
       }
       const dataUrl = await readAsDataUrl(workingBlob);
       const img = await loadImage(dataUrl);
-      return compressImage(img, 1600, 0.82);
+      return compressImage(img, 2000, 0.9);
     }
 
     function readAsDataUrl(blob) {
@@ -1170,17 +1582,25 @@
       canvas.height = height;
       const context = canvas.getContext("2d");
       context.drawImage(image, 0, 0, width, height);
-      return canvas.toDataURL("image/jpeg", quality);
+      return new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error("compress error"));
+          }
+        }, "image/jpeg", quality);
+      });
     }
 
-    function buildExportFoodCard() {
+    async function buildExportFoodCard() {
       const dailyPortions = calculateDailyPortions();
       const nutrients = calculateNutrients(dailyPortions);
       const targetForDay = targets[currentState.dayType] || {};
       const dayNoteHtml = currentState.dayNote
         ? `<div class="ExportNote">${escapeHtml(currentState.dayNote)}</div>`
         : "";
-      const mealBlocks = mealList.map((meal) => {
+      const mealBlocks = await Promise.all(mealList.map(async (meal) => {
         const mealState = currentState.meals[meal.key];
         const totalPortion = portionMeta.reduce((sum, meta) => sum + (mealState.portions[meta.key] || 0), 0);
         if (totalPortion === 0) {
@@ -1197,8 +1617,9 @@
             `;
           })
           .join("");
-        const imageHtml = mealState.images.length
-          ? `<div class="ExportImageGrid">${mealState.images.map((src) => `<img src="${src}" alt="${meal.label}">`).join("")}</div>`
+        const imageUrls = (await resolveImageUrls(mealState.images)).filter(Boolean);
+        const imageHtml = imageUrls.length
+          ? `<div class="ExportImageGrid">${imageUrls.map((src) => `<img src="${src}" alt="${meal.label}">`).join("")}</div>`
           : "";
         const noteHtml = mealState.note ? `<div class="ExportNote">${escapeHtml(mealState.note)}</div>` : "";
         return `
@@ -1213,7 +1634,7 @@
             </table>
           </div>
         `;
-      }).join("");
+      }));
 
       const summaryRowsHtml = summaryRows.map((row) => {
         const intake = row.intakeKeys.reduce((sum, key) => sum + (dailyPortions[key] || 0), 0);
@@ -1233,7 +1654,7 @@
         <div class="ExportCard">
           <div class="ExportTitle">饮食记录 ${currentDate}</div>
           ${dayNoteHtml}
-          ${mealBlocks}
+          ${mealBlocks.join("")}
           <table class="ExportTable">
             <thead>
               <tr>
@@ -1269,12 +1690,17 @@
       `;
     }
 
-    function buildExportBehaviorCard() {
+    async function buildExportBehaviorCard() {
       const behaviors = currentState.behaviors;
+      const imageUrls = (await resolveImageUrls(behaviors.images)).filter(Boolean);
+      const imageHtml = imageUrls.length
+        ? `<div class="ExportImageGrid">${imageUrls.map((src) => `<img src="${src}" alt="行为记录">`).join("")}</div>`
+        : "";
       const formatValue = (value) => value === "" ? "—" : value;
       return `
         <div class="ExportCard">
           <div class="ExportTitle">行为记录 ${currentDate}</div>
+          ${imageHtml}
           <div class="ExportBehaviorGrid">
             <div class="ExportBehaviorItem">
               <div class="ExportLabel">睡眠时长</div>
@@ -1314,6 +1740,23 @@
         .replace(/'/g, "&#39;");
     }
 
+    function waitForImages(container) {
+      const images = Array.from(container.querySelectorAll("img"));
+      if (!images.length) {
+        return Promise.resolve();
+      }
+      const promises = images.map((img) => {
+        if (img.complete && img.naturalWidth > 0) {
+          return Promise.resolve();
+        }
+        return new Promise((resolve) => {
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+        });
+      });
+      return Promise.all(promises);
+    }
+
     async function exportCard(cardHtml, fileName) {
       if (typeof html2canvas !== "function") {
         alert("导出模块未载入");
@@ -1321,7 +1764,8 @@
       }
       elements.exportLayer.innerHTML = cardHtml;
       const card = elements.exportLayer.firstElementChild;
-      const scale = Math.min(2, window.devicePixelRatio || 1);
+      await waitForImages(card);
+      const scale = Math.min(2.5, Math.max(2, window.devicePixelRatio || 1));
       const canvas = await html2canvas(card, {
         backgroundColor: null,
         scale,
@@ -1338,7 +1782,7 @@
       elements.dateInput.addEventListener("change", (event) => {
         const value = event.target.value;
         if (value) {
-          setCurrentDate(value);
+          setCurrentDate(value, { keepCurrentData: true });
         }
       });
 
@@ -1400,6 +1844,26 @@
         removeMealImage(mealKey, index);
       });
 
+      const behaviorImageInput = document.querySelector("[data-behavior-image-input]");
+      if (behaviorImageInput) {
+        behaviorImageInput.addEventListener("change", (event) => {
+          handleBehaviorImagesSelected(event.target.files);
+          event.target.value = "";
+        });
+      }
+
+      const behaviorImageGrid = document.querySelector("[data-behavior-image-grid]");
+      if (behaviorImageGrid) {
+        behaviorImageGrid.addEventListener("click", (event) => {
+          const target = event.target.closest("[data-remove-behavior-image]");
+          if (!target) {
+            return;
+          }
+          const index = Number(target.dataset.imageIndex);
+          removeBehaviorImage(index);
+        });
+      }
+
       document.querySelectorAll("[data-behavior-key]").forEach((input) => {
         input.addEventListener("input", (event) => {
           const key = event.target.dataset.behaviorKey;
@@ -1408,12 +1872,12 @@
       });
 
       elements.exportFoodBtn.addEventListener("click", async () => {
-        const cardHtml = buildExportFoodCard();
+        const cardHtml = await buildExportFoodCard();
         await exportCard(cardHtml, `饮食记录_${currentDate}.png`);
       });
 
       elements.exportBehaviorBtn.addEventListener("click", async () => {
-        const cardHtml = buildExportBehaviorCard();
+        const cardHtml = await buildExportBehaviorCard();
         await exportCard(cardHtml, `行为记录_${currentDate}.png`);
       });
 
@@ -1429,6 +1893,7 @@
             throw new Error("invalid targets");
           }
           targets = parsedTargets;
+          saveStoredTargets(targets);
           renderTargetStatus(true);
           updateSummary();
         } catch (error) {
@@ -1444,6 +1909,9 @@
       setCurrentDate(initialDate);
       bindEvents();
       loadTargets();
+      migrateLegacyImages().catch(() => {
+        return;
+      });
     }
 
     function getLocalDateString() {
